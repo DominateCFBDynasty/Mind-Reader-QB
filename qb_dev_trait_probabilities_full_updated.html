@@ -1,0 +1,128 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CFB 26 • QB Dev Trait Probabilities (Updated Weights)</title>
+  <style>
+    :root{--bg:#0f172a;--card:#111827;--muted:#94a3b8;--accent:#22c55e;--text:#e5e7eb;--border:#1f2937}
+    *{box-sizing:border-box}body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:#0b1220;color:var(--text);padding:24px}
+    .wrap{max-width:980px;margin:0 auto}
+    .title{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+    h1{margin:0;font-size:clamp(20px,3vw,28px);font-weight:800}
+    .subtitle{color:var(--muted);font-size:13px}
+    .card{background:linear-gradient(180deg,#121826 0%,#0f1722 100%);border:1px solid var(--border);border-radius:16px;padding:18px;margin-top:12px;box-shadow:0 20px 60px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04)}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px}
+    @media(min-width:980px){.grid{grid-template-columns:repeat(3,1fr)}}
+    label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px 2px}
+    input[type="number"],select{width:100%;background:#0b1220;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px}
+    input[type="number"]:focus,select:focus{border-color:#334155;box-shadow:0 0 0 3px rgba(51,65,85,.35)}
+    .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+    button{appearance:none;border:1px solid var(--border);background:#0b1220;color:var(--text);padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:600}
+    button.primary{background:linear-gradient(180deg,#22c55e,#16a34a);border-color:#16a34a;color:#04150a}
+    .result{margin-top:12px;border-top:1px dashed #243244;padding-top:12px;display:grid;gap:10px}
+    .bar{height:12px;background:#0b1220;border:1px solid #1f2937;border-radius:999px;overflow:hidden}
+    .fill{height:100%;background:linear-gradient(90deg,#22c55e,#16a34a)}
+    .row{display:flex;justify-content:space-between;align-items:center}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+    .small{font-size:12px;color:var(--muted)}
+    .note{background:#0c1424;border:1px solid #1f2a40;padding:10px;border-radius:12px;font-size:12px;color:#b9ccde;margin-top:10px}
+    .badge{font-size:12px;padding:4px 8px;border-radius:999px;border:1px solid #1f2937;background:#0b1220;color:#9fb2c9}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="title">
+      <div>
+        <h1>QB Dev Trait Probabilities</h1>
+        <div class="subtitle">Updated weights from your 82‑player dataset (full attributes)</div>
+      </div>
+      <div class="subtitle">In‑sample accuracy: <span class="badge">69.5%</span></div>
+    </div>
+    <div class="card">
+      <div class="grid">
+        <div><label>Archetype</label>
+          <select id="archetype">
+            <option>Backfield Creator</option><option>Dual Threat</option><option>Pocket Passer</option><option>Pure Runner</option>
+          </select>
+        </div>
+        <div><label>Gem / Bust</label>
+          <select id="gb">
+            <option>Bust</option><option>Gem</option><option>None</option>
+          </select>
+        </div>
+        <div><label>Stars</label>
+          <select id="stars"><option>5</option><option selected>4</option><option>3</option></select>
+        </div>
+
+        <div><label>Awareness</label><input id="awareness" type="number" min="0" max="99" value="70"/></div>
+        <div><label>Throw Power</label><input id="throw_power" type="number" min="0" max="99" value="88"/></div>
+        <div><label>Short Accuracy</label><input id="short_accuracy" type="number" min="0" max="99" value="78"/></div>
+        <div><label>Medium Accuracy</label><input id="medium_accuracy" type="number" min="0" max="99" value="76"/></div>
+        <div><label>Deep Accuracy</label><input id="deep_accuracy" type="number" min="0" max="99" value="74"/></div>
+        <div><label>Throw on Run</label><input id="throw_on_run" type="number" min="0" max="99" value="78"/></div>
+        <div><label>Under Pressure</label><input id="under_pressure" type="number" min="0" max="99" value="76"/></div>
+        <div><label>Break Sack</label><input id="break_sack" type="number" min="0" max="99" value="70"/></div>
+        <div><label>Speed</label><input id="speed" type="number" min="0" max="99" value="78"/></div>
+        <div><label>Acceleration</label><input id="acceleration" type="number" min="0" max="99" value="80"/></div>
+      </div>
+      <div class="actions">
+        <button class="primary" onclick="predict()">Get Probabilities</button>
+      </div>
+      <div id="out" class="result" style="display:none"></div>
+    </div>
+    <div class="note">
+      <strong>How this works:</strong> Your model is a multinomial logistic regression. Inputs are one‑hot encoded (archetype & gem/bust), standardized using your dataset mean/std, then scored with learned weights and a softmax to return per‑trait probabilities.
+    </div>
+  </div>
+
+<script>
+const PARAMS = {"num_cols": ["stars", "awareness", "throw_power", "short_accuracy", "medium_accuracy", "deep_accuracy", "throw_on_run", "under_pressure", "break_sack", "speed", "acceleration"], "encoder": {"archetype_categories": ["Backfield Creator", "Dual Threat", "Pocket Passer", "Pure Runner"], "gembust_categories": ["Bust", "Gem", "None"], "drop": "first"}, "scaler_mean": [4.012195121951219, 67.20731707317073, 88.35365853658537, 78.7560975609756, 77.09756097560975, 74.42682926829268, 77.86585365853658, 74.91463414634147, 67.17073170731707, 79.40243902439025, 82.54878048780488, 0.2682926829268293, 0.3170731707317073, 0.04878048780487805, 0.1951219512195122, 0.7317073170731707], "scaler_scale": [0.6342635914119925, 5.373234945311195, 4.070632333031297, 4.830192077203246, 5.276754721665907, 6.012244594859033, 3.658475609247958, 3.976152140167786, 7.633055326076569, 4.166825299379646, 4.464364153300872, 0.4430707835264622, 0.4653361958131445, 0.2154088016177524, 0.39629455632370575, 0.4430707835264619], "coef": [[-0.9495986705101893, 0.44835029530953385, 0.3338206022936344, 0.09486363900541232, -0.5258529240085907, -0.3857910768719104, -0.4033415370029556, 0.3621758075729044, 0.9010627569207318, -0.501050538968132, -0.12979347698697946, 0.2611912493169949, 0.36258904126786035, 0.3157547578918231, -1.1621055426446294, -0.3458765190334312], [-0.07901800265148512, -0.11887230718622276, -1.196094793138158, -0.09377767770586867, 0.45283050334499736, 0.6430629138018764, 0.033444936354553, -0.4143500019703088, -0.11670542999071817, 0.5357236431477671, -0.5259871624051017, 0.691461846230089, 0.21893808343016524, -0.4182660017470537, 0.16393357474180967, -0.10518029863804144], [0.43562602375346826, -0.4759967503361716, 0.1960806457774742, -0.35012370553375094, 0.13508062616767133, 0.33259356595918216, -0.11930531038265238, -0.45674303799952465, -0.3807302322767114, -0.09055164969442313, 0.8309979558052066, -0.8357361755771556, -0.21448157586292566, 0.20880973935355368, 0.2233919261331307, 0.2390056727068424], [0.5929906494082067, 0.14651876221286053, 0.6661935450670495, 0.34903774423420686, -0.062058205504078104, -0.5898654028891477, 0.4892019110310548, 0.5089172323969297, -0.40362709465330143, 0.05587854551478787, -0.17521731641312518, -0.11691691996992823, -0.3670455488351, -0.1062984954983231, 0.7747800417696882, 0.21205114496462965]], "intercept": [0.19499828746604897, 0.6170384005647719, 0.396449994973804, -1.2084866830046224], "classes": ["Normal", "Impact", "Star", "Elite"], "accuracy": 69.5};
+
+function softmax(z){
+  const m = Math.max(...z); const e = z.map(v => Math.exp(v - m));
+  const s = e.reduce((a,b)=>a+b,0); return e.map(v=>v/s);
+}
+function buildFeatures(){
+  const val = id => parseFloat(document.getElementById(id).value);
+  const base = [
+    val('stars'), val('awareness'), val('throw_power'), val('short_accuracy'), val('medium_accuracy'),
+    val('deep_accuracy'), val('throw_on_run'), val('under_pressure'), val('break_sack'), val('speed'), val('acceleration')
+  ];
+
+  // One-hot for archetype (drop='first')
+  const archCats = PARAMS.encoder.archetype_categories;
+  const archVal = document.getElementById('archetype').value;
+  for(let i=1;i<archCats.length;i++) base.push( archVal===archCats[i] ? 1 : 0 );
+
+  // One-hot for Gem/Bust (drop='first')
+  const gbCats = PARAMS.encoder.gembust_categories;
+  const gbVal = document.getElementById('gb').value;
+  for(let i=1;i<gbCats.length;i++) base.push( gbVal===gbCats[i] ? 1 : 0 );
+
+  // Standardize
+  const mean = PARAMS.scaler_mean, scale = PARAMS.scaler_scale;
+  return base.map((v,i)=> (v-mean[i]) / scale[i]);
+}
+function predict(){
+  const x = buildFeatures();
+  const logits = PARAMS.coef.map((row,k)=> row.reduce((acc,w,i)=> acc + w*x[i], PARAMS.intercept[k]));
+  const p = softmax(logits);
+
+  const out = document.getElementById('out');
+  out.style.display='grid';
+
+  const labels = PARAMS.classes;
+  const rows = labels.map((lab,i)=> {
+    const pct = Math.round(p[i]*100);
+    return `<div class="row"><div><strong>${lab}</strong></div><div class="mono">${pct}%</div></div>
+            <div class="bar"><div class="fill" style="width:${pct}%"></div></div>`;
+  }).join("");
+
+  const high = Math.round((p[2]+p[3])*100);
+  out.innerHTML = `<div class="row"><div class="small">HighDev (Star+Elite) probability</div><div class="mono"><strong>${high}%</strong></div></div>` + rows;
+}
+</script>
+</body>
+</html>
